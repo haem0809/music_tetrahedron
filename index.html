@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Tetrahedron</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    camera.position.set(0, 0, 50);
+    camera.lookAt(0, 0, 0);
+
+    // 조명 추가
+    const light = new THREE.PointLight(0xffffff, 2, 100); // 강도 증가
+    light.position.set(50, 50, 50); // 위치 변경
+    scene.add(light);
+
+    const ambientLight = new THREE.AmbientLight(0x404040);
+    scene.add(ambientLight);
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const analyserList = [];
+    const dataArrayList = [];
+    const audioFiles = ['vocals.wav', 'bass.wav', 'drums.wav', 'other.wav'];
+
+    let tetrahedron;
+
+    // 정사면체 생성
+    function createTetrahedron() {
+      const geometry = new THREE.TetrahedronGeometry(20);
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x3498db, // 파란색
+        transparent: true, // 투명도 활성화
+        opacity: 0.5, // 투명도 설정
+        flatShading: true, // 평면 쉐이딩
+        side: THREE.DoubleSide, // 양면 표시
+      });
+      tetrahedron = new THREE.Mesh(geometry, material);
+      scene.add(tetrahedron);
+    }
+    createTetrahedron();
+
+    // 버튼 생성
+    const button = document.createElement('button');
+    button.innerText = 'Start Visualization';
+    button.style.position = 'absolute';
+    button.style.top = '20px';
+    button.style.left = '20px';
+    button.style.padding = '10px';
+    button.style.fontSize = '16px';
+    document.body.appendChild(button);
+
+    button.addEventListener('click', () => {
+      audioContext.resume().then(() => {
+        audioFiles.forEach((file, index) => {
+          const audio = new Audio(file);
+          audio.loop = true;
+
+          const source = audioContext.createMediaElementSource(audio);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 64; // 해상도 설정
+          source.connect(analyser);
+          analyser.connect(audioContext.destination);
+
+          analyserList.push(analyser);
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          dataArrayList.push(dataArray);
+
+          audio.play();
+        });
+
+        button.style.display = 'none';
+      });
+    });
+
+    // 애니메이션 루프
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (tetrahedron) {
+        // 회전 추가
+        tetrahedron.rotation.x += 0.01;
+        tetrahedron.rotation.y += 0.01;
+
+        analyserList.forEach((analyser, index) => {
+          analyser.getByteFrequencyData(dataArrayList[index]);
+
+          const scaleFactor = dataArrayList[index].reduce((acc, val) => acc + val, 0) / (255 * dataArrayList[index].length);
+          const scale = 1 + scaleFactor * 1.5;
+
+          // 각 음원을 정사면체의 축/면에 매핑
+          if (index === 0) tetrahedron.scale.x = scale; // vocals: x축
+          if (index === 1) tetrahedron.scale.y = scale; // bass: y축
+          if (index === 2) tetrahedron.scale.z = scale; // drums: z축
+        });
+
+        renderer.render(scene, camera);
+      }
+    }
+    animate();
+  </script>
+</body>
+</html>
